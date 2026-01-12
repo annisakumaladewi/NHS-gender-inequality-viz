@@ -1,0 +1,778 @@
+---
+title: "NHS Gender Inequality: Data Visualisation Project"
+author: "Annisa Kumaladewi"
+output:
+  html_document:
+    self_contained: true
+---
+
+
+### Data Preparation
+```{r}
+library(tidyverse)
+
+df <- read_csv("UK Gender Pay Gap Data.csv")
+
+# Convert "2017-2018" -> 2018 (end year), etc.
+df2 <- df %>%
+  mutate(
+    year_end = as.integer(str_sub(Year, -4))  # last 4 chars
+  ) %>%
+  arrange(year_end)
+```
+
+### Exporting Fonts: Roboto Condensed
+```{r}
+library(showtext)
+library(sysfonts)
+
+font_add(
+  family = "Miller Text",
+  regular = "fonts/fonnts.com-Miller_Text_Roman.otf",
+  bold = "fonts/fonnts.com-Miller_Text_Bold.otf",
+  italic = "fonts/fonnts.com-Miller_Text_Italic.otf",
+  bolditalic = "fonts/fonnts.com-Miller_Text_Bold_Italic.otf"
+)
+
+font_add(
+  family = "Miller Display",
+  regular = "fonts/fonnts.com-Miller_Display_Roman.otf",
+  bold = "fonts/fonnts.com-Miller_Display_Bold.otf",
+  italic = "fonts/fonnts.com-Miller_Display_Italic.otf",
+  bolditalic = "fonts/fonnts.com-Miller_Display_Light.otf"
+)
+
+# Note: "regular" = Light weight (intentional)
+font_add(
+  family = "Franklin Gothic",
+  regular = "franklin-gothic/light.ttf",
+  bold = "franklin-gothic/bold.ttf"
+)
+
+showtext_auto()
+
+```
+
+### Data Viz Libraries
+```{r}
+library(ggrepel)
+```
+
+## Viz 1: Mean/Median Gender Pay Gap @ NHS Barts Trust
+### Data Manipulation
+```{r}
+gpg_long <- df2 %>%
+  select(
+    year_end,
+    mean_gap = GenderPayGap_HourlyPay_Mean_Percent,
+    median_gap = GenderPayGap_HourlyPay_Median_Percent
+  ) %>%
+  pivot_longer(cols = c(mean_gap, median_gap),
+               names_to = "metric",
+               values_to = "gap_pct") %>%
+  mutate(metric = recode(metric,
+                         mean_gap = "Mean (hourly)",
+                         median_gap = "Median (hourly)"))
+
+# Labels placed at last year for each line e.g. 2017-2018 becomes 2018
+label_df <- gpg_long %>%
+  group_by(metric) %>%
+  filter(year_end == max(year_end)) %>%
+  ungroup() %>%
+  mutate(label = str_replace(metric, " \\(hourly\\)", ""))  # "Mean", "Median"
+```
+
+#Styling helpers
+```{r}
+col_map <- c("Mean (hourly)" = "#fcaa2d", "Median (hourly)" = "#0ab276")
+y_position <-seq(10.3, 20.3, by = 2)
+y_breaks <- seq(10, 20, by = 2)
+y_vals <- y_breaks
+
+```
+
+  # Shaded region label (upper right)
+  annotate("text",
+           x = 2020.55, y = 20.7,
+           label = "Post-pandemic period",
+           hjust = 0, vjust = 1,
+           size = 4.2,
+           color = "gray25") +
+
+### Plotting
+```{r}
+p <- ggplot(gpg_long, aes(x = year_end, y = gap_pct, group = metric, color = metric)) +
+
+  # Post-pandemic shading
+  annotate(
+    "rect",
+    xmin = 2020, xmax = 2021,
+    ymin = -Inf, ymax = 20,
+    alpha = 0.4, fill = "#e0eaf2"
+  ) +
+
+  # Line below Post-Pandemic
+  annotate(
+    "segment",
+    x = 2020, xend = 2021,
+    y = 20, yend = 20,
+    linewidth = 0.3,
+    color = "#7a9baa"
+  ) +
+
+  # Post-Pandemic label
+  annotate(
+    "text",
+    x = 2020.5,
+    y = 20.25,
+    label = "POST-PANDEMIC",
+    color = "#7a9baa",
+    size = 12 / ggplot2::.pt,
+    vjust = 0,
+    family = "Franklin Gothic"
+  ) +
+
+  # Lines
+  geom_line(linewidth = 0.9) +
+
+  # Inline labels (no legend)
+  geom_text(
+    data = tibble(
+      year_end = c(2020.5, 2020.5),
+      gap_pct  = c(17.6, 13.5),
+      label    = c("Mean", "Median"),
+      metric   = c("Mean (hourly)", "Median (hourly)")
+    ),
+    aes(label = label, color = metric),
+    hjust = 0,
+    size = 4,
+    family = "Franklin Gothic",
+    show.legend = FALSE
+  ) +
+
+  # Scales
+  scale_color_manual(values = col_map) +
+
+  scale_x_continuous(
+    breaks = df2$year_end,
+    expand = expansion(mult = c(0.02, 0))
+  ) +
+
+  scale_y_continuous(
+    position = "right",
+    breaks = seq(10, 22, by = 2),
+    expand = expansion(mult = c(0.02, 0.05))
+  ) +
+
+  # Custom inside-right y values
+  annotate(
+    "text",
+    x = max(df2$year_end) + 0.25,
+    y = y_position,
+    label = y_vals,
+    hjust = 1,
+    size = 12 / ggplot2::.pt,
+    color = "gray40",
+    family = "Franklin Gothic"
+  ) +
+
+  # Titles / caption
+  labs(
+    title = "Gender Pay Gap at NHS Barts Trust 2018–2021",
+    subtitle = "Hourly Pay Gap (%)",
+    x = NULL,
+    y = NULL,
+    caption = "Chart by Annisa Kumaladewi. Source: GOV.UK Gender Pay Gap Service (Barts Health NHS Trust)."
+  ) +
+
+  # Theme
+  theme(
+    aspect.ratio = 3.2 / 7,
+
+    # Default body font
+    text = element_text(family = "Miller Text"),
+
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+
+    plot.margin = margin(t = 14, r = 24, b = 16, l = 0),
+
+    # Gridlines: horizontal only
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "#dcdbd8"),
+    panel.grid.minor.y = element_blank(),
+
+    legend.position = "none",
+
+    # Axes
+    axis.text.x = element_text(
+      family = "Franklin Gothic",
+      size = 12,
+      color = "gray8"
+    ),
+    axis.line.x = element_line(color = "gray8"),
+    axis.ticks.y = element_blank(),
+    axis.text.y  = element_blank(),
+
+    # Title / subtitle
+    plot.title = element_text(
+      family = "Miller Display",
+      face = "bold",
+      size = 18,
+      hjust = 0,
+      margin = margin(b = 25)
+    ),
+    plot.subtitle = element_text(
+      family = "Miller Text",
+      size = 16,
+      hjust = 0,
+      margin = margin(b = 3)
+    ),
+
+    # Caption
+    plot.caption = element_text(
+      family = "Franklin Gothic",
+      size = 9,
+      color = "#4B4B4B",
+      hjust = 0,
+      margin = margin(t = 10)
+    )
+  )
+
+p
+
+```
+
+## Viz 2: Bonus Pay Chart
+```{r}
+# Turn df into long df
+bonus_long <- df2 %>%
+  select(
+    year_end,
+    mean_gap = GenderPayGap_BonusPay_Mean_Percent,
+    median_gap = GenderPayGap_BonusPay_Median_Percent
+  ) %>%
+  pivot_longer(cols = c(mean_gap, median_gap),
+               names_to = "metric",
+               values_to = "gap_pct") %>%
+  mutate(metric = recode(metric,
+                         mean_gap = "Mean (bonus)",
+                         median_gap = "Median (bonus)"))
+```
+
+Labelling
+```{r}
+# Inline labels (manual placement = cleaner than ggrepel for 2 labels)
+bonus_labels <- tibble(
+  year_end = c(2020.5, 2020.5),
+  gap_pct  = c(34, 23),                 # <- tweak if needed after you view
+  label    = c("Mean", "Median"),
+  metric   = c("Mean (bonus)", "Median (bonus)")
+)
+
+bonus_col_map <- c("Mean (bonus)" = "#fcaa2d", "Median (bonus)" = "#0ab276")
+
+y_vals_bonus <- seq(15, 45, by = 5)
+y_position_bonus <- seq(16, 46, by = 5)
+```
+
+```{r}
+p_bonus <- ggplot(
+  bonus_long,
+  aes(x = year_end, y = gap_pct, group = metric, color = metric)
+) +
+
+  # Shaded region (post-2020)
+  annotate(
+    "rect",
+    xmin = 2020, xmax = 2021,
+    ymin = -Inf, ymax = 45,
+    alpha = 0.4, fill = "#e0eaf2"
+  ) +
+
+  # Top line + label
+  annotate(
+    "segment",
+    x = 2020, xend = 2021,
+    y = 45, yend = 45,
+    linewidth = 0.3,
+    color = "#7a9baa"
+  ) +
+
+  annotate(
+    "text",
+    x = 2020.5,
+    y = 45.4,
+    label = "COVID-19",
+    color = "#7a9baa",
+    size = 12 / ggplot2::.pt,
+    vjust = 0,
+    family = "Franklin Gothic"
+  ) +
+
+  # Y values (inside-right)
+  annotate(
+    "text",
+    x = 2021.23,
+    y = y_position_bonus,
+    label = y_vals_bonus,
+    hjust = 1,
+    size = 10 / ggplot2::.pt,
+    color = "black",
+    family = "Franklin Gothic"
+  ) +
+
+  # Lines
+  geom_line(linewidth = 0.9) +
+
+  # Inline labels
+  geom_text(
+    data = bonus_labels,
+    aes(label = label),
+    hjust = 1,
+    size = 4,
+    family = "Franklin Gothic",
+    show.legend = FALSE
+  ) +
+
+  scale_color_manual(values = bonus_col_map) +
+
+  scale_x_continuous(
+    breaks = df2$year_end,
+    limits = c(2017.8, 2021.28),
+    expand = c(0, 0)
+  ) +
+
+  scale_y_continuous(
+    position = "right",
+    breaks = seq(15, 45, by = 5),
+    limits = c(15, 46),
+    labels = scales::label_number(),
+    expand = expansion(mult = c(0.02, 0.04))
+  ) +
+
+  labs(
+    title = "Gender Bonus Pay Gap",
+    subtitle = "Bonus Pay Gap (%)",
+    x = NULL, y = NULL
+  ) +
+
+  theme(
+    # default body
+    text = element_text(family = "Miller Text"),
+
+    plot.background  = element_rect(fill = "white", color = NA),
+    panel.background = element_rect(fill = "white", color = NA),
+    plot.margin = margin(t = 8, r = 10, b = 10, l = 0),
+
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "#dcdbd8"),
+    panel.grid.minor.y = element_blank(),
+
+    legend.position = "none",
+
+    # X-axis text
+    axis.text.x = element_text(
+      family = "Franklin Gothic",
+      face = "plain",
+      size = 12,
+      color = "gray8"
+    ),
+    axis.line.x = element_line(color = "gray8"),
+    axis.ticks.y = element_blank(),
+    axis.text.y  = element_blank(),
+
+    # Title / subtitle
+    plot.title = element_text(
+      family = "Miller Display",
+      face = "bold",
+      size = 18,
+      hjust = 0,
+      margin = margin(b = 12)
+    ),
+    plot.subtitle = element_text(
+      family = "Miller Text",
+      size = 14,
+      hjust = 0,
+      margin = margin(b = 3)
+    )
+  )
+
+p_bonus
+
+```
+
+## Vertical Barbell
+```{r}
+# Data
+bonus_df <- df2 %>%
+  select(
+    year_end,
+    Women = WhoReceivesBonusPay_Women_Percent,
+    Men   = WhoReceivesBonusPay_Men_Percent
+  ) %>%
+  filter(year_end %in% c(2018, 2019, 2020, 2021)) %>%
+  mutate(year_end = as.numeric(year_end))
+
+# Long data for points + legend
+bonus_pts <- bonus_df %>%
+  pivot_longer(cols = c(Women, Men), names_to = "Gender", values_to = "share") %>%
+  mutate(Gender = factor(Gender, levels = c("Women", "Men")))
+
+col_gender <- c("Men" = "#4b73d3", "Women" = "#eb535a")
+
+# Y grid / labels inside panel
+y_breaks <- 0:4    # change if needed
+y_label_x <- 2021.23               # where the y numbers sit inside the panel (right side)
+y_label_position <- seq(0.15, 4.15, by = 1)
+```
+
+```{r}
+p_barbell_v <- ggplot(bonus_df, aes(x = year_end)) +
+
+  # Post-pandemic shading
+  annotate(
+    "rect",
+    xmin = 2020, xmax = 2021,
+    ymin = -Inf, ymax = Inf,
+    fill = "#e0eaf2", alpha = 0.4
+  ) +
+
+  geom_hline(yintercept = 0, color = "gray8", linewidth = 0.9) +
+
+  # Connector (vertical)
+  geom_segment(
+    aes(y = Women, yend = Men, xend = year_end),
+    color = "#cadfe9",
+    linewidth = 2
+  ) +
+
+  # Points
+  geom_point(
+    data = bonus_pts,
+    aes(y = share, color = Gender),
+    size = 4
+  ) +
+
+  # Y labels
+  annotate(
+    "text",
+    x = y_label_x,
+    y = y_label_position,
+    label = y_breaks,
+    hjust = 1,
+    vjust = 0.5,
+    color = "black",
+    size = 12 / ggplot2::.pt,
+    family = "Franklin Gothic"
+  ) +
+
+  scale_color_manual(
+  values = col_gender,
+  breaks = c("Women", "Men"),
+  labels = toupper(c("Women", "Men"))
+) +
+
+  scale_x_continuous(
+    breaks = 2018:2021,
+    limits = c(2017.8, 2021.28),
+    expand = c(0, 0)
+  ) +
+
+  scale_y_continuous(
+    breaks = y_breaks,
+    limits = c(0, 4.3),
+    expand = c(0, 0)
+  ) +
+
+  labs(
+    title = "Percentage of\nWomen vs Men\nReceiving Bonus",
+    subtitle = "Share of employees (%)",
+    x = NULL, y = NULL
+  ) +
+
+  theme(
+    # Default text family
+    text = element_text(family = "Miller Text"),
+
+    plot.title.position = "plot",
+    plot.caption.position = "plot",
+
+    plot.background  = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+
+    # horizontal grid only
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "#dcdbd8"),
+    panel.grid.minor.y = element_blank(),
+
+    # axes
+    axis.text.x = element_text(
+      family = "Franklin Gothic",
+      face = "plain",
+      size = 12,
+      color = "gray8"
+    ),
+    axis.ticks.x = element_line(color = "gray8"),
+    axis.ticks.length.x = unit(4, "pt"),
+    axis.line.x = element_blank(),
+    axis.ticks.y = element_blank(),
+    axis.text.y  = element_blank(),
+
+    # legend under subtitle
+    legend.position = "top",
+    legend.justification = "left",
+    legend.direction = "horizontal",
+    legend.title = element_blank(),
+    legend.text = element_text(
+      family = "Franklin Gothic",
+      face = "plain",
+      size = 12
+    ),
+    legend.key = element_blank(),
+    legend.box.just = "left",
+    legend.box.margin = margin(t = -6, b = 8, l = -10),
+
+    # titles
+    plot.title = element_text(
+      family = "Miller Display",
+      face = "bold",
+      size = 18,
+      hjust = 0,
+      margin = margin(b = 10)
+    ),
+    plot.subtitle = element_text(
+      family = "Miller Text",
+      size = 14,
+      hjust = 0,
+      margin = margin(b = 4)
+    ),
+    plot.caption = element_text(
+      family = "Franklin Gothic",
+      face = "plain",
+      size = 9,
+      color = "gray40",
+      hjust = 0,
+      margin = margin(t = 10)
+    ),
+
+    # margins: tight so it can sit beside another chart
+    plot.margin = margin(t = 8, r = 10, b = 10, l = 0)
+  )
+
+p_barbell_v
+
+
+```
+## Combining chart 2 & 3
+```{r}
+library(patchwork)
+
+p_top <- p_bonus +
+  theme(
+    axis.text.x   = element_blank(),
+    axis.title.x  = element_blank(),
+    plot.caption  = element_blank(),
+    plot.margin   = margin(t = 14, r = 10, b = 2, l = 12)
+  )
+
+p_bottom <- p_barbell_v +
+  theme(
+    plot.caption = element_blank(),
+    plot.margin  = margin(t = 2, r = 10, b = 10, l = 12)
+  )
+
+ p_stacked <-
+  (p_top / plot_spacer() / p_bottom) +
+  plot_layout(heights = c(1, 0.03, 1))
+
+p_stacked
+```
+## Stacked Bar Chart Chart: Ethnicity vs Pay Bands
+clean
+```{r}
+
+wres_df <- read_csv("wres_2020.csv")
+
+wres_median <- wres_df %>%
+  summarise(
+    s_white   = median(s_white, na.rm = TRUE),
+    s_bme     = median(s_bme, na.rm = TRUE),
+    s_unknown = median(s_unknown, na.rm = TRUE),
+
+    m_white   = median(m_white, na.rm = TRUE),
+    m_bme     = median(m_bme, na.rm = TRUE),
+    m_unknown = median(m_unknown, na.rm = TRUE),
+
+    se_white   = median(se_white, na.rm = TRUE),
+    se_bme     = median(se_bme, na.rm = TRUE),
+    se_unknown = median(se_unknown, na.rm = TRUE),
+
+    vsm_white   = median(vsm_white, na.rm = TRUE),
+    vsm_bme     = median(vsm_bme, na.rm = TRUE),
+    vsm_unknown = median(vsm_unknown, na.rm = TRUE)
+  )
+
+```
+wres_long
+```{r}
+wres_long <- wres_median %>%
+  pivot_longer(
+    cols = everything(),
+    names_to = c("band", "ethnicity"),
+    names_sep = "_",
+    values_to = "share"
+  ) %>%
+  mutate(
+    band = recode(band,
+      s   = "Support",
+      m   = "Middle",
+      se  = "Senior",
+      vsm = "Very senior"
+    ),
+    ethnicity = recode(ethnicity,
+      white   = "White",
+      bme     = "BME",
+      unknown = "Unknown"
+    ),
+    band = factor(band, levels = c("Support", "Middle", "Senior", "Very senior"))
+  )
+
+```
+
+
+plot
+```{r}
+library(scales)
+
+eth_col <- c(
+  "White"   = "#70cdde",
+  "BME"     = "#fee83e",
+  "Unknown" = "#cdcdcd"
+)
+
+y_vals  <- seq(0, 100, by = 25)
+
+# Stack order
+# Put Unknown on top (often a better convention)
+wres_long$ethnicity <- factor(wres_long$ethnicity, levels = c("White", "BME", "Unknown"))
+
+# Legend order and all caps
+legend_breaks <- c("BME", "Unknown", "White")
+legend_labels <- toupper(legend_breaks)
+```
+
+```{r}
+p_wres <- ggplot(wres_long, aes(x = band, y = share, fill = ethnicity)) +
+  geom_col(width = 0.6) +
+
+  # Baseline at y = 0 should be black
+  geom_hline(yintercept = 0, color = "black", linewidth = 0.6) +
+
+  # Manual fills + legend formatting
+  scale_fill_manual(
+    values = eth_col,
+    breaks = legend_breaks,
+    labels = legend_labels
+  ) +
+
+  scale_y_continuous(
+    labels = percent_format(accuracy = 1),
+    expand = c(0, 0),
+    limits = c(0, 1.1)
+  ) +
+  
+  # Y-axis labels
+  annotate(
+    "text",
+    x = length(unique(wres_long$band)) + 0.6,  # right side, inside panel
+    y = seq(0.05, 1.05, by = 0.25),
+    label = y_vals,
+    hjust = 1,
+    color = "gray10",
+    size = 11 / ggplot2::.pt,
+    family = "Franklin Gothic"
+  ) +
+
+
+  labs(
+    title = "Ethnic composition of NHS staff by seniority",
+    subtitle = "Median share across NHS trusts, 2020 (%)",
+    x = NULL,
+    y = NULL,
+    caption = "Chart by Annisa Kumaladewi.\nSource: NHS Workforce Race Equality Standard (WRES)"
+  ) +
+
+  theme(
+    text = element_text(family = "Miller Text"),
+
+    plot.background  = element_rect(fill = "white", colour = NA),
+    panel.background = element_rect(fill = "white", colour = NA),
+    
+    plot.margin = margin(t = 8, r = 10, b = 10, l = 0),
+
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank(),
+    panel.grid.major.y = element_line(color = "#d9d9d9", linewidth = 0.6),
+    panel.grid.minor.y = element_blank(),
+
+    axis.title = element_blank(),
+    axis.ticks = element_blank(),
+
+    axis.text.x = element_text(
+      family = "Franklin Gothic",
+      face = "plain",
+      size = 12,
+      color = "gray10",
+      margin = margin(t = 6)
+    ),
+
+    axis.text.y = element_blank(),
+
+    legend.position = "top",
+    legend.title = element_blank(),
+    legend.text = element_text(
+      family = "Franklin Gothic",
+      face = "plain",
+      size = 11,
+      color = "gray10"
+    ),
+    legend.key = element_rect(fill = "white", colour = NA),
+    legend.margin = margin(b = 6),
+    legend.box.margin = margin(b = 6),
+
+    plot.title.position = "plot",
+    plot.title = element_text(
+      family = "Miller Display",
+      face = "bold",
+      size = 20,
+      color = "gray10",
+      margin = margin(b = 6)
+    ),
+
+    plot.subtitle = element_text(
+      family = "Miller Text",
+      face = "plain",
+      size = 14,
+      color = "gray20",
+      margin = margin(b = 10)
+    ),
+
+    plot.caption.position = "plot",
+    plot.caption = element_text(
+      family = "Franklin Gothic",
+      face = "plain",
+      size = 9,
+      color = "gray40",
+      hjust = 0,
+      margin = margin(t = 10)
+    )
+  )
+
+p_wres
+
+```
+
