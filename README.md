@@ -8,10 +8,8 @@ The aim of this repository is to strengthen the original article using new data 
 ---
 
 ## Full Report
-🔗 **View the interactive HTML report:**  
-`[link-to-your-github-pages-report]`
-
-*(Best viewed in a browser)*
+🔗 **View the report:**  
+[https://github.com/annisakumaladewi/NHS-gender-inequality-viz/blob/main/NHS%20Gender%20Article.pdf]
 
 ---
 
@@ -39,16 +37,17 @@ All charts were designed with simplicity, readability, and editorial storytellin
 Data used in this project comes from publicly available sources, including:
 - GOV.UK Gender Pay Gap Service (Barts Health NHS Trust)
 - NHS Workforce Race Equality Standard (WRES)
+- NHS Pay Bands '[https://nhspayband.co.uk/nhs-pay-bands/]'
 
 The analysis focuses on aggregated trends rather than individual-level data.
 
 ---
 
 ## Repository Structure
-- report/ # R Markdown source and rendered HTML report
-- scripts/ # Data cleaning and visualisation code
-- charts/ # Exported figures
-- data/ # Raw and processed datasets
+- report
+- scripts
+- charts
+- data
 - README.md
 
 ---
